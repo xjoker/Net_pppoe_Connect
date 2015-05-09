@@ -1,18 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Threading;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+
 
 namespace 网络线路切换客户端
 {
@@ -28,8 +19,12 @@ namespace 网络线路切换客户端
             InitializeComponent();
         }
 
+
+
+
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            //拨号图标的写入
             var pathWithEnv = @"%userprofile%\AppData\Roaming\Microsoft\Network\Connections\Pbk\rasphone.pbk";
             var filePath = Environment.ExpandEnvironmentVariables(pathWithEnv);
             if (!System.IO.File.Exists(filePath))
@@ -44,63 +39,78 @@ namespace 网络线路切换客户端
         private void Button_Click(object sender, RoutedEventArgs e)
         {
 
-            string ras_log;
+            
             if(link_button.Content.ToString() != "断开")
             {
-                link_button.Content = "断开";
-                string pppoe_id = "ctcc";//默认电信线路的账号
-                string pppoe_pw = "123";
-                if ((bool)lt_Radio.IsChecked)
+                try
                 {
-                    pppoe_id = "cucc";
+                    link_button.IsEnabled = false;
+                    link_button.Content = "断开";
+                    string pppoe_id = "ctcc";//默认电信线路的账号
+                    string pppoe_pw = "123";
+                    if ((bool)lt_Radio.IsChecked)
+                    {
+                        pppoe_id = "cucc";
+                    }
+                    //使用匿名委托传递多个参数
+                    Thread th = new Thread(delegate () { pppoe.pppoe_on(pppoe_id, pppoe_pw); });
+                    th.IsBackground = true;
+                    th.Start();
+
+                    NetworkInterface[] adapters = NetworkInterface.GetAllNetworkInterfaces();//获取本机所有网卡对象
+                    foreach (NetworkInterface adapter in adapters)
+                    {
+                        if (adapter.Description.Contains("CYJH"))//枚举条件：描述中包含"CYJH""
+                        {
+                            IPInterfaceProperties ipProperties = adapter.GetIPProperties();//获取IP配置
+                            UnicastIPAddressInformationCollection ipCollection = ipProperties.UnicastAddresses;//获取单播地址集
+                            foreach (UnicastIPAddressInformation ip in ipCollection)
+                            {
+                                if (ip.Address.AddressFamily == AddressFamily.InterNetwork)//只要ipv4的
+                                    Label_Bendi.Content = ip.Address;//获取ip
+                            }
+                        }
+                    }
+                    GetIP();
+                    Label_Zhuangtai.Content = "已连接";
+                    link_button.IsEnabled = true;
                 }
-                Process p = new Process();
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.ToString());
 
-
-                p.StartInfo.FileName = "rasdial.exe";
-
-                //几个必要的参数
-                p.StartInfo.UseShellExecute = false;
-                p.StartInfo.RedirectStandardInput = true;
-                p.StartInfo.RedirectStandardOutput = true;
-                p.StartInfo.CreateNoWindow = true;
-                p.StartInfo.Arguments = " CYJH " + pppoe_id + " " + pppoe_pw;
-                p.Start();
-                ras_log = p.StandardOutput.ReadToEnd();
-                //p.Close();
-                Label_Waiwang.Content = gii.GetIP();
+                    throw;
+                }
+                
             }
             else
             {
-
+                link_button.IsEnabled = false;
                 link_button.Content = "连接";
-
-                Process p = new Process();
-
-                p.StartInfo.FileName = "rasdial.exe";
-
-                //几个必要的参数
-                p.StartInfo.UseShellExecute = false;
-                p.StartInfo.RedirectStandardInput = true;
-                p.StartInfo.RedirectStandardOutput = true;
-                p.StartInfo.CreateNoWindow = true;
-                p.StartInfo.Arguments = " CYJH /DISCONNECT";
-                p.Start();
-                ras_log = p.StandardOutput.ReadToEnd();
-                //p.Close();
-                Label_Waiwang.Content = gii.GetIP();
+                pppoe.pppoe_off();
+                Thread.Sleep(1000);
+                GetIP();
+                Label_Zhuangtai.Content = "未连接";
+                link_button.IsEnabled = true;
             }
    
-           
-
-
-
 
         }
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
+            GetIP();
+        }
+
+        //外网IP更新
+        private void GetIP()
+        {
             Label_Waiwang.Content = gii.GetIP();
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            pppoe.pppoe_off();
         }
     }
 }
