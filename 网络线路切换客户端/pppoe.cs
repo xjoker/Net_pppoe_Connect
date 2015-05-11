@@ -32,8 +32,6 @@ namespace 网络线路切换客户端
             p.Start();
             //ras_log = p.StandardOutput.ReadToEnd();
             p.Close();
-
-            
         }
 
         /// <summary>
